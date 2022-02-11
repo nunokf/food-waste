@@ -1,0 +1,153 @@
+---
+title: "Food Waste"
+output: 
+  html_document:
+    code_folding: hide
+---
+## Data Cleaning
+
+### read.csv
+```{r}
+setwd("~/2021/food waste")
+food<-read.csv("Comportamento_Alimentar.csv")
+```
+### packages
+```{r, results="hide",  warning=FALSE, message=FALSE}
+packages <- c("glmm", "lmerTest", "lme4", "Hmisc", "lattice", "ggplot2", "sjPlot")
+
+installed_packages <- packages %in% row.names(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed.packages])
+}
+
+lapply(packages, library, character.only = TRUE)
+``` 
+
+### coding dimension
+````{r}
+
+food$Dimension[food$Dimension==1]<-"aStatus"
+food$Dimension[food$Dimension==2]<-"Environment"
+food$Dimension[food$Dimension==3]<-"Economic"
+food$Dimension[food$Dimension==4]<-"Social"
+```
+
+### coding temporal framing
+```{r}
+food$Tem_Val[food$Tem_Val==0]<-"P+F-"
+food$Tem_Val[food$Tem_Val==1]<-"P-F+"
+```
+
+### coding dv:food choices
+```{r}
+food$escolha[food$escolha==0]<-"excess"
+food$escolha[food$escolha==1]<-"enough"
+```
+
+### as.factor
+```{r}
+food$id<-food$ï..id 
+food$id<-as.factor(food$id)
+food$Scenario<-as.factor(food$Scenario)
+food$Dimension<-as.factor(food$Dimension)
+food$Tem_Val<-as.factor(food$Tem_Val)
+food$escolha<-as.factor(food$escolha)
+``` 
+
+## Models
+```{r, message=FALSE}
+m1<- glmer(escolha ~ Dimension*Tem_Val + Q_comida_fora + (1|id/Scenario),
+           data = food, family = binomial, control = glmerControl(optimizer = "bobyqa"))
+
+m2<- glmer(escolha ~ Dimension*Q_consumo_sustentavel +  Q_comida_fora + (1|id/Scenario),
+           data = food, family = binomial, control = glmerControl(optimizer = "bobyqa"))
+``` 
+
+
+### summary m1
+```{r, message=FALSE}
+summary(m1)
+anova(m1)
+``` 
+```{r}
+confint(m1, method = "Wald")
+```
+
+### summary m2
+```{r, message=FALSE}
+summary(m2)
+anova(m2)
+``` 
+
+```{r}
+confint(m2, method = "Wald")
+```
+
+```{r}
+tab_model(
+  m1)
+```
+## Graph
+```{r setup, warning=FALSE, message=FALSE}
+food<-read.csv("Comportamento_Alimentar.csv")
+food$Dimension[food$Dimension==1]<-"Status"
+food$Dimension[food$Dimension==2]<-"Environmental"
+food$Dimension[food$Dimension==3]<-"Economic"
+food$Dimension[food$Dimension==4]<-"Social"
+
+ggplot(data = food, aes(x = Dimension, y = PredictedProbability_01)) +
+  ylab("Probability of choosing to cook just enough food") + xlab("Dimension") +
+  theme(axis.title.x = element_text(color="black", size = 15),
+        axis.title.y = element_text(color="black", size = 15),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13)) +
+  scale_x_discrete(name ="Dimension", 
+                   limits=c("Status","Environmental","Economic","Social")) +
+  ylim(0.00, 1.00) +
+  geom_violin(scale = "area", adjust = .8) +
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult = .5), 
+               geom="errorbar", color="red", width = .1) +
+  stat_summary(fun.y=mean, geom="point", color="red") +
+  geom_smooth(method = "glmer") 
+
+``` 
+  
+  
+```{r}
+ggplot(data = food, aes(x = Dimension, y = PredictedProbability_01)) +
+  ylab("Probability of choosing to cook just enough food") + xlab("Dimension") +
+  theme(axis.title.x = element_text(color="black", size = 15),
+        axis.title.y = element_text(color="black", size = 15),
+        axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13)) +
+  scale_x_discrete(name ="Dimension", 
+                   limits=c("Status","Environmental","Economic","Social")) +
+  ylim(0.00, 1.00) +
+  geom_boxplot()
+```
+
+```{r}
+apatheme <- theme_bw(base_size = 12)+
+  theme(panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank())
+
+fixd.plot <- ggplot(food, aes(x = Dimension, y = PredictedProbability_01))  +
+  geom_point(position = position_jitter(width = .1), alpha = .2) +
+  # geom_point(size = 1, colour = "grey60", alpha = .5, position = position_jitter(width = .3, height = 0)) +
+  #geom_errorbar(data = food, aes(x = diff, y = m, ymin = m -sd, ymax = m + sd), 
+                #position = position_nudge(x = -.2), width = .2) +
+scale_x_discrete(name ="Dimension", 
+                   limits=c("Status","Environmental","Economic","Social")) +
+  
+  #confirm if this is to remove or not
+  #geom_point(data = food, aes(y = PredictedProbability_01), size = 4, position = position_nudge(x = -.2))  + 
+  #error bar
+  stat_summary(fun.data=mean_sdl, fun.args = list(mult = .5), 
+               geom="errorbar", color="red", width = .1) + 
+  stat_summary(fun.y=mean, geom="point", color="red") +
+  
+    ylab("Probability of cooking just enough food") + xlab("Dimension") + apatheme
+ggsave("figure4.pdf", width=4, height=4, unit='in', dpi=300)
+
+fixd.plot
+```
